@@ -1,0 +1,25 @@
+Anima Trainer
+=============
+
+This project includes code from Aozora Trainer.
+
+    Aozora Trainer
+    Copyright (c) Hysocs
+    https://github.com/Hysocs/Aozora_Trainer
+    Licensed under the Apache License, Version 2.0
+
+The vendored portion is the GUI chrome in `anima/gui/`, derived from Aozora's
+`gui/gui.py` and `gui/gui_theme.py` at commit b9efef2:
+
+  anima/gui/theme.py     -- verbatim (was gui/gui_theme.py)
+  anima/gui/widgets.py   -- derived: the widget factories, themed splitter,
+                            CompressedLogBuffer / VirtualConsoleWidget,
+                            CustomFolderDialog and GraphPanel, with Aozora's
+                            SDXL- and timestep-allocation-specific code removed
+  anima/gui/process.py   -- ProcessRunner derived from Aozora's, retargeted
+
+A full copy of the Apache License 2.0 as distributed with Aozora is kept at
+`anima/gui/LICENSE.Aozora`.
+
+The remaining GUI modules -- `app.py`, `schema.py`, `bridge.py`, `fields.py`,
+`metrics.py` -- are original to this project.

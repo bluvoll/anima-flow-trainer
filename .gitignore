@@ -1,0 +1,42 @@
+# Development environment, managed by uv against uv.lock.
+.venv/
+# What install.sh / install.bat produce. `venv/` is deliberately a different name from `.venv/`
+# so an installed copy cannot take over the uv-managed one.
+venv/
+start-gui.sh
+start-gui.bat
+
+__pycache__/
+*.pyc
+*.egg-info/
+
+# Checkpoints, samples and per-run config copies.
+output/
+*.safetensors
+
+# Your own configs stay local by default. To publish a chosen one:  git add -f configs/<name>.toml
+configs/*.toml
+
+# Reference checkout of Aozora Trainer. The GUI chrome is already vendored into `anima/gui/`
+# with attribution in NOTICE and anima/gui/LICENSE.Aozora, so this copy is redundant, unimported
+# and 169MB.
+Aozora_Trainer/
+# Not integrated (Phase 7 was never started) and carries its own .git, which would become a
+# broken gitlink. Nothing under anima/ imports it.
+RamTorch/
+
+# Working snapshots and third-party reference docs -- local only.
+backups/
+weight_dropout.pdf
+high-frequency-token-loss.md
+
+# Our working copy of the README, with real paths and dataset names.
+Private-README.md
+
+# Editor/tool state and caches.
+.claude/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+.idea/
+.vscode/

@@ -118,8 +118,10 @@ produced by upstream's own script, and all four `config.json` files identical.
 
 ---
 
+### How the GUI looks
 
 <img width="1843" height="1185" alt="imagen" src="https://github.com/user-attachments/assets/7c311edf-bae2-4413-9c0c-1faf6533f238" />
+
 
 
 ## 1. Cache latents (required first)

@@ -644,19 +644,27 @@ def main() -> int:
             r.append(check("  and the GUI now works on the copy",
                            gui._current_path.resolve() == written.resolve()))
 
-            # run_name drives the filename: a managed config is RENAMED, not duplicated, so the
-            # dropdown never offers two files that are the same run under different names.
+            # run_name drives the filename, but changing it SAVES A NEW FILE and leaves the old
+            # one alone. Deriving a second run from an existing config is the ordinary way to use
+            # this GUI; moving the original out from under the user is data loss, not tidiness.
+            source_bytes = written.read_bytes()
             gui.editors["train.run_name"].set("renamed_run")
             written2 = gui._persist(gui.collect())
             made.append(written2)
-            r.append(check("changing run_name renames the managed config",
-                           written2 is not None
-                           and written2.name == "renamed_run.toml"
-                           and not (CONFIG_DIR / "edited_outside.toml").exists(),
+            r.append(check("changing run_name saves a NEW config",
+                           written2 is not None and written2.name == "renamed_run.toml",
                            str(written2)))
+            r.append(check("  and the config it was loaded from still exists, byte for byte",
+                           (CONFIG_DIR / "edited_outside.toml").exists()
+                           and written.read_bytes() == source_bytes))
+            r.append(check("  and each file holds its own run_name",
+                           load_config(written).train.run_name == "edited_outside"
+                           and load_config(written2).train.run_name == "renamed_run"))
+            r.append(check("  and the GUI follows the new file",
+                           gui._current_path.resolve() == written2.resolve()))
 
-            # A rename onto an existing config is a run_name collision, which is also a CHECKPOINT
-            # collision -- so it asks rather than silently overwriting.
+            # Saving onto a DIFFERENT existing config is a run_name collision, which is also a
+            # CHECKPOINT collision -- so it asks rather than silently overwriting.
             squatter = CONFIG_DIR / "occupied.toml"
             bridge.write_toml(squatter, bridge.defaults() | {"dataset.path": "/y",
                                                              "train.run_name": "occupied"})
@@ -668,7 +676,7 @@ def main() -> int:
                     lambda *a, **k: QtWidgets.QMessageBox.StandardButton.No)
                 gui.editors["train.run_name"].set("occupied")
                 declined = gui._persist(gui.collect())
-                r.append(check("a rename onto an existing config asks first, and No cancels",
+                r.append(check("saving onto an existing config asks first, and No cancels",
                                declined is None and squatter.read_bytes() == squatter_bytes
                                and (CONFIG_DIR / "renamed_run.toml").exists()))
                 QtWidgets.QMessageBox.question = staticmethod(
@@ -775,6 +783,61 @@ def main() -> int:
                                     multires_training=False).is_training))
     r.append(check("audit needs neither GPU nor model",
                    "--model-path" not in audit_launch("/data", 64).argv))
+
+    # --------------------------------------------- which folders Audit / Cache actually run on
+    # Both tools take exactly ONE directory, but `path` and `subsets` are mutually exclusive in the
+    # loader -- so a multi-subset config has no `dataset.path` at all. Reading only `dataset.path`
+    # sent `""` to the subprocess, and `Path("")` is `Path(".")`, which passes `.is_dir()`: the
+    # buttons silently audited/cached the repo root instead of refusing.
+    gui = TrainingGUI()
+    try:
+        # A fresh window auto-selects a preset, so start from a known state rather than whatever
+        # configs/ happens to hold on this machine.
+        gui.editors["dataset.subsets"].set([])
+        gui.editors["dataset.path"].set("/data/single")
+        r.append(check("with no subsets, the dataset path is used",
+                       gui._dataset_paths(gui.collect()) == ["/data/single"]))
+
+        gui.editors["dataset.subsets"].set([{"path": "/data/a", "num_repeats": 2},
+                                            {"path": "/data/b", "texture": False}])
+        r.append(check("with subsets, every subset folder is used and dataset.path is ignored",
+                       gui._dataset_paths(gui.collect()) == ["/data/a", "/data/b"],
+                       str(gui._dataset_paths(gui.collect()))))
+
+        # The trap, pinned directly: an empty entry must vanish, not become ".".
+        gui.editors["dataset.subsets"].set([{"path": "  "}, {"path": "/data/b"}])
+        r.append(check("  a blank subset folder is dropped, never resolved to '.'",
+                       gui._dataset_paths(gui.collect()) == ["/data/b"]))
+        gui.editors["dataset.subsets"].set([])
+        gui.editors["dataset.path"].set("")
+        paths = gui._dataset_paths(gui.collect())
+        r.append(check("  and an empty config yields nothing to run, not '.'", paths == [],
+                       str(paths)))
+
+        # Nothing to run must not launch a process at all.
+        launched = []
+        real_run = gui._run
+        gui._run = lambda launch, training=True: launched.append(launch)
+        try:
+            gui._audit()
+            gui._cache()
+            r.append(check("Audit/Cache with no folder launch nothing and say so",
+                           launched == []))
+
+            gui.editors["dataset.subsets"].set([{"path": "/data/a"}, {"path": "/data/b"},
+                                                {"path": "/data/c"}])
+            gui._audit()
+            r.append(check("Audit queues one run per subset folder",
+                           len(launched) == 1 and len(gui._queue) == 2
+                           and launched[0].argv[-3] == "/data/a",
+                           f"{len(launched)} started, {len(gui._queue)} queued"))
+            r.append(check("  and Stop drops the queue rather than skipping ahead",
+                           (gui._stop(), gui._queue == [])[1]))
+        finally:
+            gui._run = real_run
+            gui._queue = []
+    finally:
+        gui.deleteLater()
 
     # ------------------------------------------------------------- end to end
     # A real subprocess through the real runner. Pins a teardown bug that cost an hour to find:

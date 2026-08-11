@@ -168,6 +168,8 @@ class TrainingGUI(QtWidgets.QWidget):
         self.rows: dict[str, tuple] = {}
         self.runner = None
         self._retired = None
+        # Launches still to run after the current one -- one per dataset folder (see `_run_each`).
+        self._queue: list = []
         self._applying = False
         self._current_path: Path | None = None
         # Configs opened from outside `configs/`, kept for the session so the preset
@@ -512,9 +514,15 @@ class TrainingGUI(QtWidgets.QWidget):
         settings, tweaking a knob and pressing Start used to rewrite their file in place -- and
         `write_toml` regenerates the TOML, so their comments went with it.
 
-        **A rename never lands on an existing config without asking.** `run_name` collides with
-        more than this file: two runs sharing it also share `out_dir/<run_name>.safetensors`, so
-        the checkpoints overwrite each other too. That is worth a dialog.
+        **Changing `run_name` writes a NEW config and leaves the old one in place.** The filename
+        still follows `run_name`, so the two names never drift -- but following a name is not a
+        reason to delete a file. Deriving a second run from an existing config is the ordinary way
+        to use this GUI, and the previous behaviour moved the original out from under the user:
+        load `modan-ft.toml`, rename to `modan-ft-v2`, Save, and `modan-ft.toml` was gone.
+
+        **A save never lands on a *different* existing config without asking.** `run_name` collides
+        with more than this file: two runs sharing it also share `out_dir/<run_name>.safetensors`,
+        so the checkpoints overwrite each other too. That is worth a dialog.
         """
         target = self._managed_target(flat)
         src = self._current_path
@@ -538,14 +546,7 @@ class TrainingGUI(QtWidgets.QWidget):
             self.log(f"{src.name} was opened from {src.parent} -- saving a copy to "
                      f"{target.name}, original untouched")
         elif src_resolved is not None and target.resolve() != src_resolved:
-            # Managed file whose name no longer matches run_name: move it rather than leave a
-            # stale duplicate behind for the dropdown to offer.
-            try:
-                src.replace(target)
-                self.log(f"Renamed {src.name} -> {target.name} to match run_name")
-            except OSError as exc:
-                self.log(f"ERROR renaming {src.name} -> {target.name}: {exc}")
-                return None
+            self.log(f"run_name changed -- saved as {target.name}, {src.name} left as it was")
 
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
         bridge.write_toml(target, flat)
@@ -676,6 +677,14 @@ class TrainingGUI(QtWidgets.QWidget):
         QtCore.QTimer.singleShot(0, lambda: setattr(self, "_retired", None))
         self._refresh()
 
+        if self._queue:
+            # A folder that failed does not cancel the rest: auditing three directories and having
+            # the first one fail should still report on the other two. `_run` refuses to start
+            # while a runner is live, so this waits for the next event-loop turn -- `self.runner`
+            # is already None above, but the QThread it referred to is still finishing.
+            nxt = self._queue.pop(0)
+            QtCore.QTimer.singleShot(0, lambda: self._run(nxt, training=False))
+
     def _start(self):
         flat = self.collect()
         ok, err = bridge.validate(flat)
@@ -693,26 +702,66 @@ class TrainingGUI(QtWidgets.QWidget):
         self._run(train_launch(path, self.num_processes()))
 
     def _stop(self):
+        # Drop the rest of the queue first: Stop means stop, not "skip to the next folder".
+        if self._queue:
+            self.log(f"Stopped -- {len(self._queue)} queued folder(s) skipped.")
+            self._queue = []
         if self.runner is not None and self.runner.isRunning():
             self.runner.stop()
 
+    def _dataset_paths(self, flat: dict) -> list[str]:
+        """Every directory this config actually reads images from, in config order.
+
+        `path` and `subsets` are mutually exclusive in the loader, so a config with subset rows has
+        no single dataset path -- and both tools below take exactly one directory per invocation.
+
+        Empty entries are dropped rather than passed through, because `Path("")` is `Path(".")` and
+        passes `.is_dir()`: an empty box would silently audit or cache the repo root instead of
+        failing. That was the live bug here -- with subsets configured, `dataset.path` is unset, so
+        both buttons ran against `.`.
+        """
+        subsets = flat.get("dataset.subsets") or []
+        raw = [s.get("path") for s in subsets] if subsets else [flat.get("dataset.path")]
+        return [p for p in (str(x or "").strip() for x in raw) if p]
+
+    def _run_each(self, launches: list, what: str) -> None:
+        """Run one launch per dataset directory, in turn.
+
+        Sequential rather than concurrent: caching is GPU-bound, and interleaving the output of
+        several would make the per-folder reports unreadable.
+        """
+        if not launches:
+            return
+        self._queue = list(launches[1:])
+        if self._queue:
+            self.log(f"{what} {len(launches)} dataset folders in turn.")
+        self._run(launches[0], training=False)
+
     def _cache(self, dry=False):
         c = self.collect()
+        paths = self._dataset_paths(c)
+        if not paths:
+            self.log("Nothing to cache -- set a Dataset path, or give the subset rows a folder.")
+            return
         tiers = c.get("dataset.resolutions") or [c.get("dataset.resolution") or 1024]
-        self._run(cache_launch(
-            c.get("dataset.path") or "", c.get("train.model_path") or "", tiers,
+        self._run_each([cache_launch(
+            p, c.get("train.model_path") or "", tiers,
             min_bucket_reso=c.get("dataset.min_bucket_reso") or 256,
             max_bucket_reso=c.get("dataset.max_bucket_reso") or 1920,
             bucket_reso_steps=c.get("dataset.bucket_reso_steps") or 64,
             upscale=not c.get("dataset.bucket_no_upscale", True),
             multires_training=bool(c.get("dataset.multires_training")),
             dry_run=dry, gpus=self.gpu_arg(),
-        ), training=False)
+        ) for p in paths], "Caching")
 
     def _audit(self):
         c = self.collect()
-        self._run(audit_launch(c.get("dataset.path") or "",
-                               c.get("dataset.bucket_reso_steps") or 64), training=False)
+        paths = self._dataset_paths(c)
+        if not paths:
+            self.log("Nothing to audit -- set a Dataset path, or give the subset rows a folder.")
+            return
+        steps = c.get("dataset.bucket_reso_steps") or 64
+        self._run_each([audit_launch(p, steps) for p in paths], "Auditing")
 
     def closeEvent(self, event):
         if self.runner is not None and self.runner.isRunning():

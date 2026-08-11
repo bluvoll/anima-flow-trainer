@@ -1,6 +1,6 @@
 # Anima trainer
 
-Diffusers-native trainer for Anima (Cosmos-Predict2 DiT + LLMAdapter), built for 2×4090.
+Diffusers-native trainer for Anima (Cosmos-Predict2 DiT + LLMAdapter), built for my own 2×4090, by using SDNQ the vram usage in FullFinetune can be brought down to ~10GB.
 Full finetune and LoRA/LoKr, sd-scripts bucketing, SDNQ quantization.
 
 Everything runs from the repo root using its own venv. **Never use `python`/`pip` directly** —
@@ -25,7 +25,7 @@ a clean venv.
 |---|---|
 | **3.11** | what every measurement below was taken on; the installer picks it when both are present |
 | **3.12** | the whole graph resolves (77 packages, torch ships cp312 wheels for linux x86_64 and win_amd64) but nothing has been *run* on it — the installer prefers 3.11 when both are present and says so when it falls back |
-| **3.13** | excluded: torch has wheels, sdnq and triton are untested and the lock has never been resolved against it |
+| **3.13** | excluded: torch has wheels, SDNQ and triton are untested and the lock has never been resolved against it |
 
 If `uv` is on PATH the installer syncs from `uv.lock`, which reproduces the exact resolved set. If
 not it falls back to pip, which needs three things in order that a plain `pip install -e .` gets
@@ -860,26 +860,26 @@ Gate: `anima/parity/test_curriculum.py`, 26 checks.
 
 <img width="1262" height="353" alt="imagen" src="https://github.com/user-attachments/assets/1f2972c8-faa7-43cc-b7c8-52ce1c97b549" />
 
-### These are imported from Disty's sdnq and depend entirely on it, no pytorch_optimizer due to lacking energy to gate quantized optimizers and int8 behind disty's optims, deal with it.
+### These are imported from Disty's SDNQ and depend entirely on it, no pytorch_optimizer due to lacking energy to gate quantized optimizers and int8 behind disty's optims, deal with it.
 
 
 | key | default | notes |
 |---|---|---|
 | `kind` | `"adamw"` | `"adamw8bit"`, `"adafactor"`, `"came"`, `"lion"`, `"muon"` are SDNQ |
 | `lr` | 1e-5 | full FT: 5e-6–1e-5. LoRA: ~1e-4 |
-| `quantize_state` | `false` | needs an sdnq `kind`; ~4× off optimizer state |
+| `quantize_state` | `false` | needs an SDNQ `kind`; ~4× off optimizer state |
 | `offload_state` | `false` | moves it to host RAM |
-| `use_kahan` | `false` | sdnq only; see below |
+| `use_kahan` | `false` | SDNQ only; see below |
 
 **`betas` length is checked at load.** CAME keeps a third moment for its instability factor and
 unpacks three; the two-element default otherwise sails through config loading and dies inside
 `came_update` at the first step, after model load and dataset scan, with a bare "expected 3, got 2"
 that names neither the key nor the optimizer. CAME's defaults are `[0.9, 0.999, 0.9999]`.
 
-**`use_kahan` — for when the step size approaches a bf16 ulp.** sdnq keeps a per-parameter residual
+**`use_kahan` — for when the step size approaches a bf16 ulp.** SDNQ keeps a per-parameter residual
 buffer and folds the part of each update the bf16 cast discarded back into the next one. It is
-**not** an alternative to stochastic rounding: sdnq applies both, SR on the cast and Kahan on its
-remainder (`sdnq/optim/utils.py:57`). SR makes the *expected* lost update zero; Kahan makes the
+**not** an alternative to stochastic rounding: SDNQ applies both, SR on the cast and Kahan on its
+remainder (`SDNQ/optim/utils.py:57`). SR makes the *expected* lost update zero; Kahan makes the
 *realised* one zero.
 
 When it matters: measured on a rank-8 LoRA at `lr = 2e-5`, step/ulp is 6.8 at peak LR — safe — but
@@ -894,7 +894,7 @@ Measured full-FT ladder (1024×576, bs1×accum4, 1.76B trainable):
 |---|---|---|
 | fp32 AdamW, no grad ckpt | **OOM** | — |
 | + gradient checkpointing | 18.0 GB | 1.83 s/it |
-| + sdnq adamw | 16.8 GB | 2.02 s/it |
+| + SDNQ adamw | 16.8 GB | 2.02 s/it |
 | + quantized state | 14.2 GB | 2.19 s/it |
 | + offloaded state | **9.8 GB** | 3.44 s/it |
 
@@ -914,7 +914,7 @@ The baseline genuinely OOMs. For full FT, `adamw8bit` + `quantize_state` is the 
 >
 > ```
 > RuntimeError: expected mat1 and mat2 to have the same dtype, but got: c10::BFloat16 != float
->   ... sdnq/training/layers/linear/forward.py, in linear_backward
+>   ... SDNQ/training/layers/linear/forward.py, in linear_backward
 > ```
 >
 > Reproduced on a single GPU with `accelerate launch`, and fixed by `--mixed_precision no`. It only
@@ -1249,7 +1249,7 @@ CUDA_VISIBLE_DEVICES=1 venv/bin/python anima/parity/test_train_sanity.py configs
 venv/bin/python anima/parity/bench_vram.py configs/full.toml --gpu 1
 
 # quantized-matmul crossover on this GPU
-CUDA_VISIBLE_DEVICES=1 venv/bin/python anima/parity/test_sdnq_quality.py --sweep
+CUDA_VISIBLE_DEVICES=1 venv/bin/python anima/parity/test_SDNQ_quality.py --sweep
 
 # bucketing still matches sd-scripts exactly (2000/2000)
 venv/bin/python anima/parity/test_bucket_parity.py
@@ -1267,7 +1267,7 @@ venv/bin/python anima/parity/test_multires.py          # add --waf for the 2000-
 venv/bin/python anima/parity/test_gui.py
 
 # re-pin the quantized-matmul crossover on this GPU
-CUDA_VISIBLE_DEVICES=1 venv/bin/python anima/parity/test_sdnq_quality.py \
+CUDA_VISIBLE_DEVICES=1 venv/bin/python anima/parity/test_SDNQ_quality.py \
     --sweep --sizes 88 96 104 112 120 128
 ```
 

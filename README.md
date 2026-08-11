@@ -159,6 +159,10 @@ venv/bin/python -m anima.tools.cache_latents cache \
 resolutions = [768, 1024, 1280]     # replaces `resolution`; setting both is an error
 ```
 
+<img width="1258" height="266" alt="imagen" src="https://github.com/user-attachments/assets/f7f7e034-e786-434a-b40a-39f713fb6541" />
+
+
+
 **A tier is a repeat at a different resolution.** N tiers cost N× the epoch and N× the cache — the
 model simply sees each image at N sizes instead of one. Nothing else changes: batches stay
 bucket-homogeneous, step counting is unchanged, and DDP is unaffected.
@@ -182,6 +186,10 @@ source-area distribution (2000 sources)
    suggested ladder: resolutions = [640, 832, 1088]
    -> 190/2000 sources (9.5%) sit below the top rung
 ```
+<img width="1103" height="423" alt="imagen" src="https://github.com/user-attachments/assets/c82c8f46-c391-4788-afa1-a62d8b292d7e" />
+
+
+
 
 Rule of thumb: **bottom rung below p1–p5** so every tier genuinely shrinks something; the **gap
 between the top rung and p10 is your collapse rate**. On the mixed set, `[640, 896, 1280]` collapses ~1%
@@ -421,6 +429,9 @@ warning, so a typo costs a `KeyError` at load and not a wasted run.
 
 ## 3. The knobs that matter
 
+<img width="1282" height="691" alt="imagen" src="https://github.com/user-attachments/assets/69ea437f-48b4-4d95-928f-2b8ca18faf5a" />
+
+
 ### `[adapter]` — LoRA vs full finetune
 
 > **The default is LoRA.** If you omit `[adapter]` entirely you get a rank-32 LoRA, not a full
@@ -472,6 +483,9 @@ an end-to-end generate in ComfyUI has not been run.
 
 ### `[component_lr]` — full finetune **and** LoRA
 
+<img width="1249" height="354" alt="imagen" src="https://github.com/user-attachments/assets/502eccfd-bc48-4481-a630-289760dea704" />
+
+
 Per-component LRs. **`0.0` means freeze**, which allocates no gradient and no optimizer state —
 that is a memory decision, not just a learning one.
 
@@ -514,6 +528,9 @@ A LR on a component with no adapter injected is now **rejected** rather than ign
 ```
 
 ### `torch.compile`
+
+<img width="1273" height="186" alt="imagen" src="https://github.com/user-attachments/assets/8e12ccdb-f417-43e9-882a-37c5940d53f5" />
+
 
 ```toml
 [train]
@@ -580,6 +597,11 @@ inside an `InductorError`.
 
 ### `[flow]` — timestep distribution
 
+
+<img width="1269" height="349" alt="imagen" src="https://github.com/user-attachments/assets/eee74625-7769-442f-8337-6511a05a517f" />
+
+
+
 | key | default | notes |
 |---|---|---|
 | `timestep_sample_method` | `"logit_normal"` | or `"uniform"` |
@@ -626,7 +648,11 @@ Three practical points:
 than a unit-variance schedule assumes — and `shift` pushes `t` higher still. On illustration data
 **shift < 3 is worth an A/B.** `flux_shift` crosses over static `shift=3` at about 1024px.
 
-#### High-frequency token loss (`hf_scale`)
+#### High-frequency token loss (`hf_scale`) by Wiwi
+
+<img width="395" height="157" alt="imagen" src="https://github.com/user-attachments/assets/26e2767c-faae-400a-bbb8-ad9d16aa8ea7" />
+
+
 
 Plain velocity MSE weights every token equally, so flat regions — most of an illustration by area —
 dominate the gradient, and the edges and texture that decide whether an image *looks* sharp
@@ -664,9 +690,12 @@ turning it on does not shift the timestep or caption-dropout streams. A same-see
 A/B. Verified by `anima/parity/test_hf_loss.py` (28 checks, including negative controls for
 weights-from-prediction, zero padding, and the missing-eps NaN).
 
-### `[[curriculum]]` — timestep phases over training progress
+### `[[curriculum]]` — timestep phases over training progress by Inpaint a.k.a. the anon who loves migu and teto (?)
 
-Ported from TrainTrain's `train_ts_schedule`. A step function over progress: the **last** phase
+<img width="1278" height="385" alt="imagen" src="https://github.com/user-attachments/assets/d2946574-bf1d-4f66-b90a-3dfd27e5bef7" />
+
+
+Ported from Inpaint's TrainTrain `train_ts_schedule`. A step function over progress: the **last** phase
 whose `at ≤ progress` is active. Off by default; an empty curriculum is bit-identical to the
 feature not existing (gated).
 
@@ -721,7 +750,10 @@ its own docstring notes that this fights a decaying scheduler; here `lr_mul` **m
 scheduler's current LR, so it composes with REX and `lr_mul = 1.0` is an exact no-op. And phases
 are TOML tables rather than a text block, so the loader type-checks them.
 
-### `mode = "texture"` — crop training
+### `mode = "texture"` — crop training by Inpaint a.k.a. the anon who loves migu and teto (?).
+
+<img width="1265" height="376" alt="imagen" src="https://github.com/user-attachments/assets/d336980b-be89-4402-8d67-c435e3102247" />
+
 
 A texture phase replaces the bucketed full image with a **canvas-sized crop chosen from the source
 by detail**, captioned with a trigger word alone. There is no `texture = true` switch: a curriculum
@@ -825,6 +857,11 @@ Gate: `anima/parity/test_texture.py`, 50 checks.
 Gate: `anima/parity/test_curriculum.py`, 26 checks.
 
 ### `[optimizer]` — where full FT lives or dies
+
+<img width="1262" height="353" alt="imagen" src="https://github.com/user-attachments/assets/1f2972c8-faa7-43cc-b7c8-52ce1c97b549" />
+
+### These are imported from Disty's sdnq and depend entirely on it, no pytorch_optimizer due to lacking energy to gate quantized optimizers and int8 behind disty's optims, deal with it.
+
 
 | key | default | notes |
 |---|---|---|
@@ -1065,6 +1102,9 @@ the base model and **should widen** if the run learned anything from your captio
 
 ### `[dataset.caption]`
 
+<img width="1247" height="225" alt="imagen" src="https://github.com/user-attachments/assets/ba11a018-acc5-4bfe-abec-448a5b05cb62" />
+
+
 `caption_mode` is `tags` | `nl` | `tags_nl` | `nl_tags` | `mixed`. Captions are rebuilt every
 `__getitem__`, so shuffling and dropout give a different view each epoch — which is exactly why
 text embeddings are not cached.
@@ -1157,6 +1197,9 @@ sort correctly against each other and a resumed run cannot delete the wrong one.
 checkpoints written before the layout was flattened are still recognised.
 
 ### Progress and ETA
+
+<img width="2547" height="1191" alt="imagen" src="https://github.com/user-attachments/assets/4509b115-93f8-4a1c-8d07-b2f70ba53789" />
+
 
 `train.progress` picks how the run reports itself. The default `auto` draws a tqdm bar when stdout
 is a terminal and prints the per-step line when it is not — a bar redirected into a log file is
@@ -1368,6 +1411,10 @@ a hard error, so if it is not here it will be rejected.
 | `source` | `"auto"` | `"images"` \| `"latents"` \| `"encode"` \| `"auto"` — `"encode"` trains without a cache, at +0.4GB and +16% step time; see §1 |
 
 #### `[[dataset.subsets]]` — several source directories
+
+
+<img width="1269" height="541" alt="imagen" src="https://github.com/user-attachments/assets/82127195-5982-4f5c-b21e-c8a97d1e086e" />
+
 
 ```toml
 [dataset]

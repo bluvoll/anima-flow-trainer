@@ -223,10 +223,12 @@ transformers==5.14.1
     #   anima-trainer
     #   peft
     #   sdnq
-triton==3.6.0
+triton==3.6.0 ; sys_platform != 'win32'
     # via
     #   anima-trainer
     #   torch
+triton-windows==3.6.0.post26 ; sys_platform == 'win32'
+    # via anima-trainer
 typer==0.27.1
     # via transformers
 typing-extensions==4.16.0

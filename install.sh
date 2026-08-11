@@ -31,16 +31,16 @@ for arg in "$@"; do
 done
 
 # ---------------------------------------------------------------- find an interpreter
-# 3.11 first: every measurement in the README was taken on it. 3.12 resolves cleanly (77 packages,
-# torch ships cp312 wheels) but has not been run, so it is a fallback rather than a peer. 3.13 is
-# excluded -- torch has wheels, sdnq and triton are untested there.
+# 3.11 first: every measurement in the README was taken on it. 3.12 and 3.13 both resolve to the
+# identical pinned set and pass the whole CPU gate suite, but nothing has been *trained* on either,
+# so they are fallbacks rather than peers. Preference order is the order of this list.
 usable() {
-    "$1" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] in ((3,11),(3,12)) else 1)' \
+    "$1" -c 'import sys; raise SystemExit(0 if sys.version_info[:2] in ((3,11),(3,12),(3,13)) else 1)' \
         >/dev/null 2>&1
 }
 
 PYTHON=""
-for candidate in python3.11 python3.12 python3 python; do
+for candidate in python3.11 python3.12 python3.13 python3 python; do
     command -v "$candidate" >/dev/null 2>&1 || continue
     if usable "$candidate"; then PYTHON="$(command -v "$candidate")"; break; fi
 done
@@ -48,7 +48,9 @@ done
 # pyenv keeps its interpreters off PATH unless selected, so a machine with 3.11 installed can look
 # like it has none. Ask pyenv directly before giving up.
 if [ -z "$PYTHON" ] && command -v pyenv >/dev/null 2>&1; then
-    for ver in $(pyenv versions --bare 2>/dev/null | grep -E '^3\.(11|12)\.' | sort -V -r); do
+    # Ordered by preference, not by version: 3.11 is the tested one, so it wins over a newer 3.13.
+    for ver in $(pyenv versions --bare 2>/dev/null | grep -E '^3\.(11|12|13)\.' \
+                 | sort -V -r | sort -s -t. -k2,2n); do
         cand="$(pyenv root)/versions/$ver/bin/python"
         if [ -x "$cand" ] && usable "$cand"; then PYTHON="$cand"; break; fi
     done
@@ -56,7 +58,7 @@ fi
 
 if [ -z "$PYTHON" ]; then
     echo
-    die "no Python 3.11 or 3.12 found.
+    die "no Python 3.11, 3.12 or 3.13 found.
      Install one and re-run:
        Fedora/RHEL    sudo dnf install python3.11
        Debian/Ubuntu  sudo apt install python3.11 python3.11-venv
@@ -67,7 +69,9 @@ fi
 PY_VER="$("$PYTHON" -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])')"
 say "Python $PY_VER  ${DIM}$PYTHON${OFF}"
 case "$PY_VER" in
-    3.12.*) warn "3.12 resolves but has never been run end to end; 3.11 is the tested version." ;;
+    3.12.*|3.13.*)
+        warn "${PY_VER%.*} installs and passes the CPU gates, but no training run has been done on"
+        warn "  it; 3.11 is the tested version." ;;
 esac
 
 # ---------------------------------------------------------------- venv

@@ -23,9 +23,21 @@ a clean venv.
 
 | | |
 |---|---|
-| **3.11** | what every measurement below was taken on; the installer picks it when both are present |
-| **3.12** | the whole graph resolves (77 packages, torch ships cp312 wheels for linux x86_64 and win_amd64) but nothing has been *run* on it — the installer prefers 3.11 when both are present and says so when it falls back |
-| **3.13** | excluded: torch has wheels, SDNQ and triton are untested and the lock has never been resolved against it |
+| **3.11** | what every measurement below was taken on; the installer picks it when several are present |
+| **3.12** | resolves to the identical pinned set (torch ships cp312 wheels for linux x86_64 and win_amd64); not run end to end |
+| **3.13** | verified: `uv sync` **and** `pip install -r requirements.txt` both resolve to the same pins, and every CPU gate passes — bucket parity, GUI 226/226, texture, multires, schedules, hf-loss, param groups, curriculum, encode-mode, converter. No *training* run has been done on it |
+
+The installer prefers 3.11 whenever it is present and says so when it falls back, so a newer
+interpreter is never picked silently.
+
+**Windows uses `triton-windows`, not `triton`.** Upstream Triton publishes manylinux wheels only —
+there is no `triton` for Windows at all, so a plain dependency makes the install unresolvable
+there. `triton-windows` is the fork that builds them and tracks upstream version for version, so
+it is pinned to the same 3.6 series torch 2.10.0 expects (`3.6.0.post26` *is* Triton 3.6.0); left
+unconstrained it resolves to 3.7.1 and pairs a torch built against 3.6 with a 3.7 runtime. The
+split is a marker in `pyproject.toml`, so nothing needs choosing at install time. It imports as
+`triton` either way, so SDNQ and `check_install` are unaffected. This matters rather than being
+cosmetic: SDNQ's speed comes from its Triton kernels.
 
 If `uv` is on PATH the installer syncs from `uv.lock`, which reproduces the exact resolved set. If
 not it falls back to pip, which needs three things in order that a plain `pip install -e .` gets

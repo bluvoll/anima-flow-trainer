@@ -6,16 +6,24 @@ description = "Diffusers-native trainer for Anima (Cosmos-Predict2 trunk + LLMAd
 # both are present. 3.12 is supported because torch 2.10.0+cu128 ships cp312 wheels for linux
 # x86_64 and win_amd64 and the whole graph resolves (verified with `uv lock --python 3.12`), but
 # nothing has been *run* on it.
-# 3.13 is excluded deliberately: torch has cp313 wheels but sdnq/triton are untested there and the
-# lock has never been resolved against it.
-requires-python = ">=3.11,<3.13"
+# 3.13 resolves and installs (verified below); SDNQ's author reports it working. Still not the
+# default the installers pick, because nothing has been *trained* on it here.
+requires-python = ">=3.11,<3.14"
 
 dependencies = [
     # Pinned known-good: sdnq 0.2.4 imports cleanly on stable 2.10 (its >=2.12
     # branch never fires) and this is the torch its Triton path is tested against.
     "torch==2.10.0",
     "torchvision",
-    "triton",
+    # Triton publishes NO Windows wheels -- 3.6.0 ships manylinux x86_64/aarch64 only, so a plain
+    # `triton` dependency makes the whole install unresolvable on Windows. `triton-windows` is the
+    # fork that builds them, versioned to track upstream: 3.6.0.postN *is* triton 3.6.0.
+    # SDNQ's speed comes from its Triton kernels, so this is load-bearing on Windows, not optional.
+    "triton ; sys_platform != 'win32'",
+    # Constrained to the 3.6 series on purpose: torch 2.10.0 pins triton==3.6.0 on Linux, and
+    # triton-windows tracks upstream version-for-version, so the fork must match. Left unpinned it
+    # resolves to 3.7.1, pairing a torch built against Triton 3.6 with a 3.7 runtime.
+    "triton-windows>=3.6,<3.7 ; sys_platform == 'win32'",
     # SDNQ's quantizer backend only exists on diffusers main, not in 0.39.0.
     "diffusers",
     "sdnq",

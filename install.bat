@@ -23,24 +23,27 @@ if /i "%~1"=="-h" goto :help
 if /i "%~1"=="--help" goto :help
 
 rem ---------------------------------------------------------------- find an interpreter
-rem 3.11 first: every measurement in the README was taken on it. 3.12 resolves cleanly (torch
-rem ships cp312 win_amd64 wheels) but has not been run, so it is a fallback rather than a peer.
-rem 3.13 is excluded -- sdnq and triton are untested there.
+rem 3.11 first: every measurement in the README was taken on it. 3.12 and 3.13 both resolve to the
+rem identical pinned set (torch ships cp312/cp313 win_amd64 wheels, and triton-windows publishes
+rem cp311/cp312/cp313) and pass the CPU gates, but nothing has been trained on either, so they are
+rem fallbacks rather than peers. Call order below IS the preference order.
 rem Written as subroutine calls rather than nested for/if/&& blocks on purpose: cmd parses a whole
 rem parenthesised block before running any of it, so a `&&` inside two levels of parens behaves in
 rem ways that depend on the contents. `call` sidesteps the parser entirely.
 set "PYTHON="
 call :try_py 3.11
 call :try_py 3.12
+call :try_py 3.13
 call :try_exe python3.11.exe
 call :try_exe python3.12.exe
+call :try_exe python3.13.exe
 call :try_exe python.exe
 if not defined PYTHON (
     echo.
-    echo xxx No Python 3.11 or 3.12 found.
+    echo xxx No Python 3.11, 3.12 or 3.13 found.
     echo     Install one from https://www.python.org/downloads/ and re-run.
     echo     During setup, tick "Add python.exe to PATH".
-    echo     3.11 is the tested version; 3.12 also works.
+    echo     3.11 is the tested version; 3.12 and 3.13 also work.
     exit /b 1
 )
 
@@ -49,8 +52,9 @@ rem snippet containing its own quotes is parsed by cmd in ways that depend on th
 rem prints "Python 3.11.15" with no quoting to get wrong.
 for /f "tokens=2" %%V in ('%PYTHON% -V 2^>^&1') do set "PY_VER=%%V"
 echo ==^> Python !PY_VER!  (%PYTHON%)
-echo !PY_VER! | findstr /b "3.12." >nul && (
-    echo !!! 3.12 resolves but has never been run end to end; 3.11 is the tested version.
+echo !PY_VER! | findstr /b "3.12. 3.13." >nul && (
+    echo !!! this Python installs and passes the CPU gates, but no training run has been done
+    echo     on it; 3.11 is the tested version.
 )
 
 rem ---------------------------------------------------------------- venv
@@ -168,7 +172,7 @@ rem `python.exe` is whatever happens to be first on PATH, which is frequently 3.
 if defined PYTHON exit /b 0
 where %~1 >nul 2>&1
 if errorlevel 1 exit /b 0
-%~1 -c "import sys; raise SystemExit(0 if sys.version_info[:2] in ((3,11),(3,12)) else 1)" >nul 2>&1
+%~1 -c "import sys; raise SystemExit(0 if sys.version_info[:2] in ((3,11),(3,12),(3,13)) else 1)" >nul 2>&1
 if errorlevel 1 exit /b 0
 set "PYTHON=%~1"
 exit /b 0

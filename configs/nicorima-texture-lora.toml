@@ -1,0 +1,82 @@
+[[curriculum]]
+at = 0.0
+t_range = [ 0.0, 1.0,]
+mode = "fullres"
+
+[[curriculum]]
+at = 0.1
+t_range = [ 0.0, 1.0,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.15
+t_range = [ 0.0, 0.6,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.4
+t_range = [ 0.0, 1.0,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.45
+t_range = [ 0.0, 0.6,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.6
+t_range = [ 0.0, 1.0,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.65
+t_range = [ 0.0, 0.6,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.8
+t_range = [ 0.0, 1.0,]
+mode = "texture"
+
+[[curriculum]]
+at = 0.85
+t_range = [ 0.0, 0.6,]
+mode = "texture"
+
+[dataset]
+path = "/home/bluvoll/Escritorio/nicorima"
+source = "encode"
+
+[train]
+model_path = "/home/bluvoll/anima-diffusers"
+output_dir = "output"
+run_name = "nicorima-texture-lora"
+epochs = 25
+max_steps = 960
+num_workers = 8
+compile = "default"
+save_every_steps = 60
+
+[optimizer]
+lr = 2.5e-5
+betas = [ 0.9, 0.99,]
+
+[schedule]
+kind = "rex"
+
+[adapter]
+kind = "lora"
+rank = 16
+alpha = 16.0
+
+[flow]
+sigmoid_scale = 1.3
+shift = 0.0
+use_ot = true
+
+[dataset.caption]
+shuffle_tags = true
+tag_dropout_percent = 0.1
+caption_dropout_percent = 0.1
+protected_tags = []
+nl_shuffle_sentences = true

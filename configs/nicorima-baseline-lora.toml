@@ -1,0 +1,35 @@
+[dataset]
+path = "/home/bluvoll/Escritorio/nicorima"
+source = "latents"
+
+[train]
+model_path = "/home/bluvoll/anima-diffusers"
+output_dir = "output"
+run_name = "nicorima-baseline-lora"
+epochs = 25
+num_workers = 8
+compile = "default"
+
+[optimizer]
+lr = 2.5e-5
+betas = [ 0.9, 0.99,]
+
+[schedule]
+kind = "rex"
+
+[adapter]
+kind = "lora"
+rank = 16
+alpha = 16.0
+
+[flow]
+sigmoid_scale = 1.3
+shift = 0.0
+use_ot = true
+
+[dataset.caption]
+shuffle_tags = true
+tag_dropout_percent = 0.1
+caption_dropout_percent = 0.1
+protected_tags = []
+nl_shuffle_sentences = true

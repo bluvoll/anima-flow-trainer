@@ -1,0 +1,49 @@
+[dataset]
+source = "latents"
+[[dataset.subsets]]
+path = "/home/bluvoll/Escritorio/Modan (madan (kkh8936))"
+texture = false
+
+[[dataset.subsets]]
+path = "/home/bluvoll/Escritorio/nicorima"
+texture = false
+
+[train]
+model_path = "/home/bluvoll/anima-diffusers"
+output_dir = "output"
+run_name = "modan-finetune-quantizedOptim-Offload"
+epochs = 25
+gradient_accumulation_steps = 4
+num_workers = 8
+compile = "default"
+skip_final_save = true
+
+[optimizer]
+kind = "adamw8bit"
+lr = 7e-6
+betas = [ 0.9, 0.99,]
+quantize_state = true
+offload_state = true
+
+[schedule]
+kind = "rex"
+warmup_steps = 15
+
+[adapter]
+kind = "none"
+
+[flow]
+sigmoid_scale = 1.3
+shift = 1.0
+use_ot = true
+
+[quant]
+use_quantized_matmul = false
+skip_policy = "anima_int8_mm"
+
+[dataset.caption]
+shuffle_tags = true
+tag_dropout_percent = 0.1
+caption_dropout_percent = 0.1
+protected_tags = []
+nl_shuffle_sentences = true

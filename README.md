@@ -59,6 +59,9 @@ venv/bin/python -m anima.tools.convert_model \
     --out    /path/to/anima-diffusers
 ```
 
+<img width="944" height="678" alt="imagen" src="https://github.com/user-attachments/assets/f6c159b3-bb0c-47bf-a169-bb768f2d99ac" />
+
+
 The three inputs are only ever read. The output directory must be empty or absent — it refuses to
 merge into an existing repo, where a stale file would silently survive a re-convert.
 
@@ -115,7 +118,15 @@ produced by upstream's own script, and all four `config.json` files identical.
 
 ---
 
+
+<img width="1843" height="1185" alt="imagen" src="https://github.com/user-attachments/assets/7c311edf-bae2-4413-9c0c-1faf6533f238" />
+
+
 ## 1. Cache latents (required first)
+
+<img width="769" height="154" alt="imagen" src="https://github.com/user-attachments/assets/b9b32bd8-5d37-44ec-a0f4-a4389b3b643b" />
+
+
 
 Training reads latents, never images. Caching also freezes bucket assignment.
 

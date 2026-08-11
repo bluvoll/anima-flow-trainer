@@ -5,6 +5,8 @@
 venv/
 start-gui.sh
 start-gui.bat
+start-converter.sh
+start-converter.bat
 
 __pycache__/
 *.pyc

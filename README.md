@@ -15,8 +15,11 @@ always `venv/bin/python`, so a system or neighbouring environment cannot leak in
 install.bat           # Windows
 ```
 
-Both find a Python **3.11** or **3.12**, create `venv/`, install everything, and write a
-`start-gui.sh` / `start-gui.bat` launcher. `--recreate` starts from a clean venv.
+Both find a Python **3.11** or **3.12**, create `venv/`, install everything, and write two
+launchers: `start-gui.sh` / `start-gui.bat` for the trainer GUI, and `start-converter.sh` /
+`start-converter.bat` for the single-file → diffusers converter (§0b). Each forwards its arguments,
+so a bare double-click opens the window while flags still reach the CLI. `--recreate` starts from
+a clean venv.
 
 | | |
 |---|---|
@@ -42,7 +45,8 @@ venv/bin/python -m anima.tools.check_install
 The trainer reads a **diffusers-format repo**, but Anima ships as single files. Convert once:
 
 ```bash
-venv/bin/python -m anima.tools.convert_model --gui        # pick the files in a window
+./start-converter.sh                                      # or start-converter.bat on Windows
+venv/bin/python -m anima.tools.convert_model --gui        # the same window, without the launcher
 ```
 
 or headlessly:

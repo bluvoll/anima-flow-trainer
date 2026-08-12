@@ -165,11 +165,41 @@ class ProcessRunner(QThread):
             self.errorSignal.emit(f"Subprocess error: {e}")
             self.finishedSignal.emit(-1)
 
+    def _kill_tree_windows(self) -> bool:
+        """Kill the launcher *and* everything under it. Returns False if taskkill was unusable.
+
+        `Popen.terminate()` is TerminateProcess on one PID, and Windows has no killpg, so it takes
+        down `accelerate.commands.launch` and leaves the process it spawned alive -- simple_launcher
+        is an unconditional `subprocess.Popen` (accelerate/commands/launch.py:989), so there is
+        always at least one grandchild, single GPU included. Two things then go wrong at once: the
+        real trainer keeps running on the GPU, and because it inherited the stdout handle the pipe
+        never reaches EOF, so `iter(readline, '')` blocks forever and `finishedSignal` is never
+        emitted. The GUI keeps its Stop button up and keeps printing step lines -- which is exactly
+        what "stop does nothing on Windows" looks like from the outside. `/T` walks the tree, `/F`
+        is required because the ranks have no window to accept a polite close.
+        """
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(self.process.pid)],
+                capture_output=True,
+                # No console flash: the GUI has no terminal attached to borrow.
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                timeout=15,
+            )
+            return True
+        except (OSError, subprocess.SubprocessError):
+            return False
+
     def stop(self):
         if self.process and self.process.poll() is None:
             self.stop_requested = True
+            killed_tree = False
             if IS_WINDOWS:
-                self.process.terminate()
+                killed_tree = self._kill_tree_windows()
+                if not killed_tree:
+                    # Last resort. Only reaches the launcher, so a grandchild may survive and hold
+                    # the GPU -- said out loud rather than left for the user to find in nvidia-smi.
+                    self.process.terminate()
             else:
                 os.killpg(self.process.pid, signal.SIGTERM)
             try:
@@ -180,6 +210,11 @@ class ProcessRunner(QThread):
                 else:
                     os.killpg(self.process.pid, signal.SIGKILL)
                 self.process.wait()
+            if IS_WINDOWS and not killed_tree:
+                self.logSignal.emit(
+                    "WARNING: taskkill unavailable -- only the launcher was stopped. Check Task "
+                    "Manager for a surviving python.exe still holding the GPU."
+                )
             self.logSignal.emit("Process stopped.")
 
 

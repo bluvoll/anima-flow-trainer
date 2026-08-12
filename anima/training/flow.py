@@ -71,6 +71,17 @@ class FlowConfig:
     def __post_init__(self):
         if self.shift is not None and self.flux_shift:
             raise ValueError("set either `shift` or `flux_shift`, not both")
+        # shift <= 0 is not "shift off" -- the map (t*shift)/(1+(shift-1)*t) sends every t to 0 at
+        # shift=0 and goes negative below it. Either way the batch trains at t=0, where the input is
+        # the clean latent and the velocity target is unpredictable noise: loss parks at 1.0 and the
+        # run learns nothing while looking perfectly healthy. Omit the key for no shift.
+        if self.shift is not None and self.shift <= 0.0:
+            raise ValueError(
+                f"flow.shift must be > 0, got {self.shift}. shift={self.shift} does not mean "
+                f"'no shift' -- it collapses every timestep to 0, which pins the loss at 1.0 and "
+                f"trains on nothing. Remove the `shift` key entirely for no shift, or use 1.0 for "
+                f"the identity map."
+            )
         if self.timestep_sample_method not in ("logit_normal", "uniform"):
             raise ValueError(f"unknown timestep_sample_method: {self.timestep_sample_method}")
         # `sigmoid_scale` is the width of the logistic squash applied to a normal draw. There is no

@@ -418,7 +418,9 @@ SPEC: dict[str, Spec] = {
         "Static timestep shift; pushes t higher (more noise). Inference default is 3.0. Latents "
         "here normalise to std ~0.69 rather than 1.0, so effective noise is already higher than a "
         "unit-variance schedule assumes -- shift < 3 is worth an A/B on illustration data.\n\n"
-        "Empty = no shift.",
+        "Leave EMPTY for no shift. Do not type 0: the map sends every timestep to exactly 0, so "
+        "the model is fed clean latents and asked to predict pure noise. Loss sits at 1.0 for the "
+        "whole run and nothing is learned. Values <= 0 are rejected.",
         lambda: F.SciEditor("none", optional=True)),
     "flow.flux_shift": _spec(
         "Resolution-aware shift",

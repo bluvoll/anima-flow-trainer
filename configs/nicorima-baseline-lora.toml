@@ -24,7 +24,7 @@ alpha = 16.0
 
 [flow]
 sigmoid_scale = 1.3
-shift = 0.0
+shift = 1.0
 use_ot = true
 
 [dataset.caption]

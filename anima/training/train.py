@@ -252,6 +252,44 @@ class Trainer:
         # raised as well so a partially-specialised graph still has room.
         import torch._dynamo
 
+        # WINDOWS ONLY, deliberately. torch >= 2.6 defaults `specialize_float` to False, which
+        # lifts every Python float the traced code multiplies into a tensor out of the graph and
+        # in as a 0-d float64 *CPU* placeholder. PEFT's LoRA forward does exactly that with
+        # `self.scaling[adapter]`, so a LoRA run grows one such scalar per adapted Linear, and
+        # inductor then has to codegen a CPU kernel to cast them. That needs a host C++ compiler:
+        # on Linux it finds gcc and the cost is one negligible kernel, but on Windows it shells out
+        # to `cl.exe`, which is absent unless MSVC Build Tools are installed AND on PATH -- so the
+        # run dies at the first step with `InductorError: Compiler: cl is not found`. Reproduced
+        # here against the real trunk, and confirmed to be the LoRA scaling scalars specifically:
+        # 14 zero-dim float64 CPU placeholders for 14 adapted Linears, none without an adapter.
+        #
+        # Specializing is numerically identical either way -- the same constant, baked in rather
+        # than passed as a 0-d tensor -- and LoRA scaling is alpha/rank, fixed for the whole run,
+        # so it costs no extra recompiles. It is still gated to Windows rather than set globally:
+        # Linux has a working host compiler, so there is nothing to fix there, and every recorded
+        # run and parity number on that platform was measured with the default. Not worth
+        # perturbing the graph on the platform where it already works.
+        if sys.platform == "win32":
+            torch._dynamo.config.specialize_float = True
+
+            # Separate, unfixed inductor bug, and it only bites full finetunes: the compiled
+            # backward builds the base-weight gradient `mm` with an fp32 out buffer against bf16
+            # inputs and dies with `Expected out tensor to have dtype c10::BFloat16, but got
+            # float`. Reproduced against the real trunk with regional on and off, dynamic true and
+            # false, and gradient checkpointing on and off -- none of them avoid it. LoRA runs are
+            # safe because the base weights are frozen, so that gradient mm is never emitted.
+            # Warned rather than refused: this is unverified on Linux, and a hard error here would
+            # break finetune+compile runs on a platform where it may well work.
+            if not self.cfg.is_lora:
+                import warnings
+
+                warnings.warn(
+                    "train.compile with a full finetune hits a torch inductor codegen bug on "
+                    "Windows (compiled backward emits an fp32 out buffer for a bf16 mm) and will "
+                    "fail at the first step. Unset train.compile for this run, or train a LoRA -- "
+                    "adapters are unaffected. Linux is untested and may be fine."
+                )
+
         if cfg.compile_dynamic:
             torch._dynamo.config.recompile_limit = max(
                 torch._dynamo.config.recompile_limit, 32
